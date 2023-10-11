@@ -38,6 +38,13 @@ func Read(r io.Reader, ptr interface{}) error {
 
 	return rr.Read(ptr)
 }
+func ReadToChan(r io.Reader, ptr *chan any) error {
+	rr, err := NewReader(r)
+	if err != nil {
+		return err
+	}
+	return rr.ReadToChan(ptr)
+}
 
 // Reader reads data from a NumPy data file.
 type Reader struct {
@@ -863,4 +870,42 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func (r *Reader) ReadToChan(ptr *chan any) error {
+	if r.err != nil {
+		return r.err
+	}
+
+	rv := reflect.ValueOf(ptr)
+
+	if !rv.IsValid() || rv.Kind() != reflect.Ptr {
+		return errNotPtr
+	}
+
+	if rv.IsNil() {
+		return errNilPtr
+	}
+
+	nelems := numElems(r.Header.Descr.Shape)
+	dt, err := newDtype(r.Header.Descr.Type)
+	if err != nil {
+		return err
+	}
+	r.order = dt.order
+
+	if dt.rt != float64Type {
+		return ErrTypeMismatch
+	}
+	var buf [8]byte
+	for i := 0; i < nelems; i++ {
+		_, err := r.read(buf[:])
+		if err != nil && err != io.EOF {
+			r.err = err
+			return r.err
+		}
+		*ptr <- math.Float64frombits(dt.order.Uint64(buf[:]))
+	}
+	close(*ptr)
+	return r.err
 }

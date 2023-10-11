@@ -17,19 +17,19 @@ import (
 
 func TestReaderDense(t *testing.T) {
 	want := map[string]map[bool]*mat.Dense{
-		"2x3": map[bool]*mat.Dense{
+		"2x3": {
 			false: mat.NewDense(2, 3, []float64{0, 1, 2, 3, 4, 5}), // row-major
 			true:  mat.NewDense(2, 3, []float64{0, 2, 4, 1, 3, 5}), // col-major
 		},
-		"6x1": map[bool]*mat.Dense{
+		"6x1": {
 			false: mat.NewDense(6, 1, []float64{0, 1, 2, 3, 4, 5}),
 			true:  mat.NewDense(6, 1, []float64{0, 1, 2, 3, 4, 5}),
 		},
-		"1x1": map[bool]*mat.Dense{
+		"1x1": {
 			false: mat.NewDense(1, 1, []float64{42}),
 			true:  mat.NewDense(1, 1, []float64{42}),
 		},
-		"scalar": map[bool]*mat.Dense{
+		"scalar": {
 			false: mat.NewDense(1, 1, []float64{42}),
 			true:  mat.NewDense(1, 1, []float64{42}),
 		},
@@ -198,6 +198,107 @@ func TestReaderSlice(t *testing.T) {
 		}
 	}
 }
+func TestReaderChan(t *testing.T) {
+	//want := map[string]map[string]interface{}{
+	//	"float32": {
+	//		"2x3":    []float32{0, 1, 2, 3, 4, 5},
+	//		"6x1":    []float32{0, 1, 2, 3, 4, 5},
+	//		"1x1":    []float32{42},
+	//		"scalar": []float32{42},
+	//	},
+	//	"float64": {
+	//		"2x3":    []float64{0, 1, 2, 3, 4, 5},
+	//		"6x1":    []float64{0, 1, 2, 3, 4, 5},
+	//		"1x1":    []float64{42},
+	//		"scalar": []float64{42},
+	//	},
+	//	"int8": {
+	//		"2x3":    []int8{0, 1, 2, 3, 4, 5},
+	//		"6x1":    []int8{0, 1, 2, 3, 4, 5},
+	//		"1x1":    []int8{42},
+	//		"scalar": []int8{42},
+	//	},
+	//	"int16": {
+	//		"2x3":    []int16{0, 1, 2, 3, 4, 5},
+	//		"6x1":    []int16{0, 1, 2, 3, 4, 5},
+	//		"1x1":    []int16{42},
+	//		"scalar": []int16{42},
+	//	},
+	//	"int32": {
+	//		"2x3":    []int32{0, 1, 2, 3, 4, 5},
+	//		"6x1":    []int32{0, 1, 2, 3, 4, 5},
+	//		"1x1":    []int32{42},
+	//		"scalar": []int32{42},
+	//	},
+	//	"int64": {
+	//		"2x3":    []int64{0, 1, 2, 3, 4, 5},
+	//		"6x1":    []int64{0, 1, 2, 3, 4, 5},
+	//		"1x1":    []int64{42},
+	//		"scalar": []int64{42},
+	//	},
+	//	"uint8": {
+	//		"2x3":    []uint8{0, 1, 2, 3, 4, 5},
+	//		"6x1":    []uint8{0, 1, 2, 3, 4, 5},
+	//		"1x1":    []uint8{42},
+	//		"scalar": []uint8{42},
+	//	},
+	//	"uint16": {
+	//		"2x3":    []uint16{0, 1, 2, 3, 4, 5},
+	//		"6x1":    []uint16{0, 1, 2, 3, 4, 5},
+	//		"1x1":    []uint16{42},
+	//		"scalar": []uint16{42},
+	//	},
+	//	"uint32": {
+	//		"2x3":    []uint32{0, 1, 2, 3, 4, 5},
+	//		"6x1":    []uint32{0, 1, 2, 3, 4, 5},
+	//		"1x1":    []uint32{42},
+	//		"scalar": []uint32{42},
+	//	},
+	//	"uint64": {
+	//		"2x3":    []uint64{0, 1, 2, 3, 4, 5},
+	//		"6x1":    []uint64{0, 1, 2, 3, 4, 5},
+	//		"1x1":    []uint64{42},
+	//		"scalar": []uint64{42},
+	//	},
+	//}
+
+	for _, dt := range []string{
+		"float64",
+	} {
+		for _, order := range []string{"f", "c"} {
+			for _, shape := range []string{"2x3", "6x1", "1x1"} {
+
+				fname := fmt.Sprintf("../testdata/data_%s_%s_%sorder.npy", dt, shape, order)
+				f, err := os.Open(fname)
+				if err != nil {
+					t.Errorf("%v: error: %v\n", fname, err)
+				}
+				defer f.Close()
+
+				r, err := NewReader(f)
+				if err != nil {
+					t.Errorf("%v: error: %v\n", fname, err)
+				}
+				myChan := make(chan any)
+				go r.ReadToChan(&myChan)
+				if err != nil {
+					t.Errorf("%v: error: %v\n", fname, err)
+				}
+				for {
+					val, ok := <-myChan
+					if ok == false {
+						fmt.Println(val, ok, "<-- loop broke!")
+						break // exit break loop
+					} else {
+						fmt.Println(val, ok)
+					}
+				}
+
+				fmt.Println("main() stopped")
+			}
+		}
+	}
+}
 
 func TestReaderNDimSlice(t *testing.T) {
 	want := make([]float64, 2*3*4)
@@ -250,11 +351,11 @@ func TestReaderNaNsInf(t *testing.T) {
 
 func TestReaderNpz(t *testing.T) {
 	want := map[string]map[bool]*mat.Dense{
-		"arr0.npy": map[bool]*mat.Dense{
+		"arr0.npy": {
 			false: mat.NewDense(2, 3, []float64{0, 1, 2, 3, 4, 5}), // row-major
 			true:  mat.NewDense(2, 3, []float64{0, 2, 4, 1, 3, 5}), // col-major
 		},
-		"arr1.npy": map[bool]*mat.Dense{
+		"arr1.npy": {
 			false: mat.NewDense(6, 1, []float64{0, 1, 2, 3, 4, 5}),
 			true:  mat.NewDense(6, 1, []float64{0, 1, 2, 3, 4, 5}),
 		},
